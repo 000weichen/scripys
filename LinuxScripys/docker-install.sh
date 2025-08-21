@@ -12,80 +12,98 @@ fi
 
 echo "检测到系统：$DISTRO $VERSION"
 
-# Ubuntu 系统安装方式
-if [[ "$DISTRO" == "ubuntu" ]]; then
-    echo "开始安装 Docker（Ubuntu）..."
-
-    # 安装必要的系统工具
-    sudo apt-get update
-    sudo apt-get install -y ca-certificates curl gnupg
-
-    # 信任 Docker 的 GPG 公钥
-    sudo install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    sudo chmod a+r /etc/apt/keyrings/docker.gpg
-
-    # 添加 Docker 仓库
-    echo \
-      "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.aliyun.com/docker-ce/linux/ubuntu \
-      $(lsb_release -cs) stable" | \
-      sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-    # 安装 Docker
-    sudo apt-get update
-    sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-    # 启动 Docker 服务并设置开机自启
+configure_docker() {
     sudo systemctl enable --now docker
-
-    # 配置 Docker 镜像加速器
     sudo mkdir -p /etc/docker
     echo '{
       "registry-mirrors": [
         "https://mirrors.aliyun.com"
       ]
     }' | sudo tee /etc/docker/daemon.json > /dev/null
-
-    # 重新加载 Docker 配置并重启服务
     sudo systemctl daemon-reload
     sudo systemctl restart docker
+}
 
-    echo "Docker 安装完成（Ubuntu）"
+case "$DISTRO" in
+    ubuntu)
+        echo "开始安装 Docker（Ubuntu）..."
 
-# CentOS 系统安装方式
-elif [[ "$DISTRO" == "centos" || "$DISTRO" == "rhel" ]]; then
-    echo "开始安装 Docker（CentOS/RHEL）..."
+        sudo apt-get update
+        sudo apt-get install -y ca-certificates curl gnupg lsb-release
 
-    # 安装必要的系统工具
-    sudo yum install -y yum-utils device-mapper-persistent-data lvm2
+        sudo install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
-    # 添加 Docker 仓库
-    sudo yum-config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+        echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.aliyun.com/docker-ce/linux/ubuntu \
+          $(lsb_release -cs) stable" | \
+          sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-    # 安装 Docker
-    sudo yum install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+        sudo apt-get update
+        sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+        configure_docker
+        echo "Docker 安装完成（Ubuntu）"
+        ;;
 
-    # 启动 Docker 服务并设置开机自启
-    sudo systemctl enable --now docker
+    debian)
+        echo "开始安装 Docker（Debian）..."
 
-    # 配置 Docker 镜像加速器
-    sudo mkdir -p /etc/docker
-    echo '{
-      "registry-mirrors": [
-        "https://mirrors.aliyun.com"
-      ]
-    }' | sudo tee /etc/docker/daemon.json > /dev/null
+        sudo apt-get update
+        sudo apt-get install -y ca-certificates curl gnupg
 
-    # 重新加载 Docker 配置并重启服务
-    sudo systemctl daemon-reload
-    sudo systemctl restart docker
+        sudo install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
-    echo "Docker 安装完成（CentOS/RHEL）"
+        echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.aliyun.com/docker-ce/linux/debian \
+          ${VERSION_CODENAME} stable" | \
+          sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-else
-    echo "不支持的操作系统：$DISTRO"
-    exit 1
-fi
+        sudo apt-get update
+        sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+        configure_docker
+        echo "Docker 安装完成（Debian）"
+        ;;
+
+    centos|rhel)
+        echo "开始安装 Docker（CentOS/RHEL）..."
+
+        sudo yum install -y yum-utils device-mapper-persistent-data lvm2
+        sudo yum-config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+        sudo yum install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+        configure_docker
+        echo "Docker 安装完成（CentOS/RHEL）"
+        ;;
+
+    fedora)
+        echo "开始安装 Docker（Fedora）..."
+
+        sudo dnf -y install dnf-plugins-core
+        sudo dnf config-manager --add-repo https://mirrors.aliyun.com/docker-ce/linux/fedora/docker-ce.repo
+        sudo dnf -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+        configure_docker
+        echo "Docker 安装完成（Fedora）"
+        ;;
+
+    opensuse*|sles)
+        echo "开始安装 Docker（openSUSE/SLES）..."
+
+        sudo zypper install -y ca-certificates curl
+        sudo rpm --import https://mirrors.aliyun.com/docker-ce/linux/opensuse/gpg
+        sudo zypper addrepo https://mirrors.aliyun.com/docker-ce/linux/opensuse/docker-ce.repo
+        sudo zypper refresh
+        sudo zypper install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+        configure_docker
+        echo "Docker 安装完成（openSUSE/SLES）"
+        ;;
+
+    *)
+        echo "不支持的操作系统：$DISTRO"
+        exit 1
+        ;;
+esac
 
 # 验证 Docker 是否安装成功
 docker --version
